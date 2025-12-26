@@ -1,0 +1,21 @@
+.env
+.env.docker
+node_modules
+uploads 
+tmp
+temp_matches
+venv
+models 
+ai-image-classifier-b09e6-firebase-adminsdk-fbsvc-1440ea4977.json
+curl
+descriptions.txt
+docker
+rd-test.js 
+reviewer.js 
+server.js 
+server1.js 
+frontend 
+zip folders 
+zip folder.zip 
+routes
+.dockerignore 
