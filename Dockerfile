@@ -36,3 +36,27 @@ COPY . .
 
 EXPOSE 8080
 CMD ["npm", "start"]
+
+
+
+
+
+
+
+
+
+
+# FROM public.ecr.aws/lambda/nodejs:20
+
+# # Lambda working directory
+# WORKDIR /var/task
+
+# # Install Node dependencies
+# COPY package*.json ./
+# RUN npm install --omit=dev
+
+# # Copy source code
+# COPY . .
+
+# # Lambda entry point
+# CMD ["handler.handler"]

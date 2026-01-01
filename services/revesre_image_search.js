@@ -467,3 +467,201 @@ export async function yandexReverseSearch(
     return { yandexResults: [], status: "SEARCH_FAILED", error: err.message };
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// // reverse_image_search.js (Lambda-safe)
+
+// import chromium from "@sparticuz/chromium";
+// import puppeteer from "puppeteer-core";
+// import axios from "axios";
+// import imghash from "imghash";
+// import * as cheerio from "cheerio";
+// import UserAgent from "user-agents";
+// import { HttpsProxyAgent } from "https-proxy-agent";
+
+// // ----------------------------------------------------
+// // 🧠 PUPPETEER LAUNCH (LAMBDA SAFE)
+// // ----------------------------------------------------
+// async function launchBrowser(proxy = null) {
+//   const args = [
+//     ...chromium.args,
+//     "--no-sandbox",
+//     "--disable-setuid-sandbox",
+//     "--disable-dev-shm-usage"
+//   ];
+
+//   if (proxy) {
+//     args.push(`--proxy-server=${proxy}`);
+//   }
+
+//   return puppeteer.launch({
+//     args,
+//     defaultViewport: chromium.defaultViewport,
+//     executablePath: await chromium.executablePath(),
+//     headless: chromium.headless,
+//   });
+// }
+
+// // ----------------------------------------------------
+// // P H A S H
+// // ----------------------------------------------------
+// export async function computePhash(filePathOrBuffer) {
+//   return imghash.hash(filePathOrBuffer, 16);
+// }
+
+// function hammingDistance(a, b) {
+//   let d = 0;
+//   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) d++;
+//   return d;
+// }
+
+// function matchDecision(similarity) {
+//   if (similarity >= 90) return { match: "YES — Strong Match" };
+//   if (similarity >= 70) return { match: "YES — Moderate Match" };
+//   if (similarity >= 50) return { match: "POSSIBLE MATCH" };
+//   return { match: "NO — Not a match" };
+// }
+
+// // ----------------------------------------------------
+// // 🌐 PROXY FETCHER
+// // ----------------------------------------------------
+// async function getFreshEliteProxy() {
+//   try {
+//     const { data } = await axios.get("https://free-proxy-list.net/");
+//     const $ = cheerio.load(data);
+//     const proxies = [];
+
+//     $("table.table-striped tbody tr").each((_, el) => {
+//       const tds = $(el).find("td");
+//       if ($(tds[4]).text().includes("elite") && $(tds[6]).text() === "yes") {
+//         proxies.push(`http://${$(tds[0]).text()}:${$(tds[1]).text()}`);
+//       }
+//     });
+
+//     return proxies.length
+//       ? proxies[Math.floor(Math.random() * proxies.length)]
+//       : null;
+//   } catch {
+//     return null;
+//   }
+// }
+
+// // ----------------------------------------------------
+// // 🔍 YANDEX SEARCH
+// // ----------------------------------------------------
+// export async function yandexReverseSearch(
+//   filePath,
+//   queryPhash,
+//   useProxy = false,
+//   attempt = 1
+// ) {
+//   const maxRetries = 3;
+//   let browser, page, proxy;
+
+//   try {
+//     const ua = new UserAgent({ deviceCategory: "desktop" }).toString();
+
+//     if (useProxy) {
+//       proxy = await getFreshEliteProxy();
+//     }
+
+//     browser = await launchBrowser(proxy);
+//     page = await browser.newPage();
+
+//     await page.setUserAgent(ua);
+//     await page.setViewport({ width: 1366, height: 768 });
+
+//     await page.goto("https://yandex.com/images/", {
+//       waitUntil: "networkidle2",
+//       timeout: 45000,
+//     });
+
+//     await page.evaluate(() => {
+//       document
+//         .querySelectorAll("input[type='file']")
+//         .forEach(el => (el.style.display = "block"));
+//     });
+
+//     const input = await page.waitForSelector("input[type=file]", {
+//       timeout: 15000,
+//     });
+
+//     await input.uploadFile(filePath);
+
+//     await page.waitForSelector(".CbirSites-Item", { timeout: 40000 });
+
+//     const rawResults = await page.evaluate(() =>
+//       Array.from(document.querySelectorAll(".CbirSites-Item"))
+//         .slice(0, 6)
+//         .map(item => ({
+//           thumb: item.querySelector("img")?.src,
+//           pageUrl: item.querySelector("a")?.href,
+//           title: item.querySelector(".CbirSites-ItemTitle")?.innerText || "",
+//         }))
+//     );
+
+//     await browser.close();
+
+//     const results = [];
+
+//     for (const r of rawResults) {
+//       if (!r.thumb?.startsWith("http")) continue;
+//       try {
+//         const img = await axios.get(r.thumb, { responseType: "arraybuffer" });
+//         const ph = await computePhash(Buffer.from(img.data));
+//         const similarity = 100 - (hammingDistance(queryPhash, ph) / 64) * 100;
+
+//         results.push({
+//           ...r,
+//           similarity: Number(similarity.toFixed(2)),
+//           ...matchDecision(similarity),
+//         });
+//       } catch {}
+//     }
+
+//     results.sort((a, b) => b.similarity - a.similarity);
+//     return { yandexResults: results, status: "SEARCH_COMPLETE" };
+
+//   } catch (err) {
+//     try { if (browser) await browser.close(); } catch {}
+
+//     if (attempt < maxRetries) {
+//       return yandexReverseSearch(filePath, queryPhash, true, attempt + 1);
+//     }
+
+//     return { yandexResults: [], status: "SEARCH_FAILED", error: err.message };
+//   }
+// }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -36,7 +36,7 @@ export async function runBytezAiClassification(localImagePath) {
         const aiScore = output.find(o => o.label === 'fake' || o.label === 'artificial' || o.label === 'manipulated')?.score ||
             (output.find(o => o.label === 'real' || o.label === 'authentic') ? 1 - output.find(o => o.label === 'real' || o.label === 'authentic').score : 0);
 
-        const predictionStatus = aiScore > 0.5 ? "MANIPULATED" : "CLEAN";
+        const predictionStatus = aiScore > 0.75 ? "MANIPULATED" : "CLEAN";
 
         console.log(`✅ Bytze.js classification complete. Prediction: ${predictionStatus} (Score: ${aiScore.toFixed(4)})`);
 

@@ -377,7 +377,7 @@
 
 
 
-// test.js
+// challenge_analysis.js
 
 // backend/services/challenge_analysis.js — CORRECTED FOR JSON PARSING ERROR
 
@@ -429,33 +429,44 @@ export async function analyzeSubmission(imagePath, challengeDescription) {
 
 
         const prompt = `
-You are a strict evaluator AI. Your job is to verify whether an uploaded image matches a challenge.
-Your response MUST be valid JSON. Ensure all keys and strings are properly enclosed and comma-separated.
+Act as an encouraging Skill Evaluator. Analyze the user's uploaded image against the Challenge Description.
+Your goal is to calculate a Confidence Score (0.0 to 1.0) based on effort and requirement matching.
 
-====================================
-CHALLENGE REQUIREMENTS (User Input)
-${challengeDescription}
-====================================
+CHALLENGE DESCRIPTION:
+"${challengeDescription}"
 
-EVALUATION STEPS (REQUIRED)
-1. Identify what type of challenge it is (art / photography / craft / cooking / makeup / performance etc.)
-2. Extract measurable requirements from description.
-3. Compare the image with the extracted conditions.
-4. Score each requirement as 1 (fulfilled) or 0 (not fulfilled).
-5. Confidence = matched_conditions / total_conditions.
-6. match = true only if confidence ≥ 0.60
-7. Respond ONLY in JSON — no extra text, no markdown fences (e.g., \`\`\`json).
+SCORING RUBRIC (Strictly follow these tiers):
+- TIER 1: CATEGORY MATCH (0.2 - 0.39)
+  Award this if the image belongs to the correct category (e.g., a drawing for a drawing challenge) but fails to meet any specific description requirements. 
+  
+- TIER 2: PARTIAL ATTEMPT (0.4 - 0.59)
+  Award this if the image matches the category AND at least one minor element or the general theme of the description is visible.
 
-RETURN FORMAT STRICTLY:
+- TIER 3: SUBSTANTIAL MATCH (0.6 - 0.89)
+  Award this if the majority of the specific requirements are visible and the work shows clear effort to follow the description.
 
+- TIER 4: NEAR PERFECT (0.9 - 0.95)
+  Award this only if 90% of the requirements are met, but one or two tiny details are missing.
+
+- TIER 5: FULL COMPLETION (1.0)
+  Award only if every single instruction in the description is perfectly executed.
+
+
+
+OUTPUT REQUIREMENTS:
+1. "match": Set to true if confidence is >= 0.2.
+2. "confidence": The float value calculated from the tiers above.
+3. "reason": A brief, technical breakdown of the points. (e.g., "0.3 baseline for category match + 0.2 for correct subject matter.")
+
+RESPONSE FORMAT (STRICT JSON):
 {
- "match": true or false,
- "confidence": number between 0 and 1,
- "reason": "which conditions were met and which failed"
+  "match": true,
+  "confidence": float,
+  "reason": "string"
 }
 
-If output is not valid JSON → evaluation fails.
-        `;
+Respond ONLY with JSON. No conversational filler or markdown.
+`;
 
         const response = await groqRetry(() =>
             client.chat.completions.create({
@@ -479,7 +490,7 @@ If output is not valid JSON → evaluation fails.
         );
 
         const rawContent = response.choices[0].message.content.trim();
-        console.log("\n🧠 [Groq Evaluation] Raw Result:", rawContent);
+        console.log("\n🧠 Challenege Description matching :", rawContent);
 
 
         // --- FIX: Robust JSON Extraction and Parsing ---
@@ -519,3 +530,79 @@ If output is not valid JSON → evaluation fails.
 }
 
 export default analyzeSubmission;
+
+
+
+
+
+// const prompt = `
+// Evaluate the image against the challenge description provided. 
+// Your goal is to provide a confidence score (0.0 to 1.0) that represents how much of the challenge was completed by the user according to 
+// challenge description.
+
+// CHALLENGE DESCRIPTION:
+// ${challengeDescription}
+
+// SCORING RULES:
+// 1. BASELINE SCORE: Give minimum of 0.3 if strictly nothing matches user work with challenge description but the image belongs to the correct category (e.g., it is a photo for a photography challenge), start with a minimum of 0.3 
+// to encourage the user.
+// 2. Give minimum of at least 0.4 if something  matches according to challenge description  
+// 3. Give score 0.4 to 0.9 according to your judgement about the work done 
+// 4. give Maximum of 0.9 or 0.95 only if out of all one or two of the requirements of challenge description are not matched by the user. 
+// 5. ACCURACY: Add points (up to 1.0 total) for every specific requirement from the description that is visible in the image.
+// 6. OUTPUT: Provide a "reason" that strictly explains the point breakdown (e.g., "Assigned 0.4 for category match and 0.2 for specific subject 
+// inclusion").
+
+// RESPONSE FORMAT (STRICT JSON):
+// {
+//   "match": true,
+//   "confidence": float,
+//   "reason": "Clear explanation of why these points were awarded based on visible evidence."
+// }
+
+// Respond ONLY in JSON.
+// `;
+
+
+
+
+
+// const prompt = `
+// Act as an encouraging Skill Evaluator. Analyze the user's uploaded image against the Challenge Description.
+// Your goal is to calculate a Confidence Score (0.0 to 1.0) based on effort and requirement matching.
+
+// CHALLENGE DESCRIPTION:
+// "${challengeDescription}"
+
+// SCORING RUBRIC (Strictly follow these tiers):
+// - TIER 1: CATEGORY MATCH (0.2 - 0.39)
+//   Award this if the image belongs to the correct category (e.g., a drawing for a drawing challenge) but fails to meet any specific description requirements. 
+  
+// - TIER 2: PARTIAL ATTEMPT (0.4 - 0.59)
+//   Award this if the image matches the category AND at least one minor element or the general theme of the description is visible.
+
+// - TIER 3: SUBSTANTIAL MATCH (0.6 - 0.89)
+//   Award this if the majority of the specific requirements are visible and the work shows clear effort to follow the description.
+
+// - TIER 4: NEAR PERFECT (0.9 - 0.95)
+//   Award this only if 90% of the requirements are met, but one or two tiny details are missing.
+
+// - TIER 5: FULL COMPLETION (1.0)
+//   Award only if every single instruction in the description is perfectly executed.
+
+
+
+// OUTPUT REQUIREMENTS:
+// 1. "match": Set to true if confidence is >= 0.3.
+// 2. "confidence": The float value calculated from the tiers above.
+// 3. "reason": A brief, technical breakdown of the points. (e.g., "0.3 baseline for category match + 0.2 for correct subject matter.")
+
+// RESPONSE FORMAT (STRICT JSON):
+// {
+//   "match": true,
+//   "confidence": float,
+//   "reason": "string"
+// }
+
+// Respond ONLY with JSON. No conversational filler or markdown.
+// `;

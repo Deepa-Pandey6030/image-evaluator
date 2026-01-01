@@ -1,8 +1,194 @@
+// // backend/server-evaluator.js
+// // Stateless Image Evaluation API (Production Version)
+// //docker build -t image-evaluator . && docker run -p 8100:8100 --env-file .env.docker image-evaluator 
+// //docker run -d --name image-evaluator-api --env-file .env.docker -p 8100:8100 image-evaluator
+
+
+// import express from "express";
+// import cors from "cors";
+// import dotenv from "dotenv";
+// import axios from "axios";
+// import sharp from "sharp";
+// import fs from "fs";
+// import pLimit from "p-limit";
+// import exifpkg from "exif-reader";
+// import os from "os";
+// import path from "path";
+// const { extract } = exifpkg;
+
+// // ---- Services (UNCHANGED) ----
+// import { computePhash, yandexReverseSearch } from "./services/revesre_image_search.js";
+// import { runBytezAiClassification } from "./services/bytez_ai_models1.js";
+// import { analyzeImageWithGroq } from "./services/llm_analysis.js";
+// import analyzeSubmission from "./services/challenge_analysis.js";
+// import { calculateFinalScore } from "./services/scoring.js";
+
+// // --------------------------------
+
+// dotenv.config();
+
+// const app = express();
+// const PORT = process.env.PORT || 8100;
+// const API_KEY = (process.env.API_KEY || "").trim();
+// // --------------------------------
+// // GLOBAL MIDDLEWARE (ORDER MATTERS)
+// // --------------------------------
+// app.use(cors());
+// app.use(express.json({ limit: "10mb" }));
+
+// // --------------------------------
+// // AUTH MIDDLEWARE (FIXED)
+// // --------------------------------
+// app.use((req, res, next) => {
+//   // ✅ Allow CORS preflight
+//   if (req.method === "OPTIONS") {
+//     return res.sendStatus(200);
+//   }
+
+//   const authHeader = req.headers.authorization;
+//   if (!authHeader) {
+//     return res.status(401).json({ error: "Unauthorized (missing header)" });
+//   }
+
+//   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+
+//   if (!API_KEY || token !== API_KEY) {
+//     return res.status(401).json({ error: "Unauthorized (invalid token)" });
+//   }
+
+//   next();
+// });
+
+// // --------------------------------
+// // Concurrency guard (prevents overload)
+// // --------------------------------
+// const limit = pLimit(1);
+
+// // ===================================================
+// // SINGLE STATELESS EVALUATION ENDPOINT
+// // ===================================================
+// app.post("/api/evaluate", async (req, res) => {
+//   const start = Date.now();
+
+//   const {
+//     user_id,
+//     challenge_id,
+//     challenge_description,
+//     user_description,
+//     image_url
+//   } = req.body;
+
+//   if (!image_url || !challenge_description) {
+//     return res.status(400).json({ error: "Missing required fields" });
+//   }
+
+//   await limit(async () => {
+//     let tmpPath = null;
+
+//     try {
+//       // 1️⃣ Download image (TEMP, cross-platform)
+//       tmpPath = path.join(os.tmpdir(), `${Date.now()}.jpg`);
+
+//       const response = await axios.get(image_url, {
+//         responseType: "arraybuffer",
+//         timeout: 15000
+//       });
+
+//       fs.writeFileSync(tmpPath, response.data);
+
+//       // 2️⃣ Metadata + pHash
+//       const imageBuffer = await sharp(tmpPath).toBuffer();
+//       const metadata = await sharp(imageBuffer).metadata();
+//       const pHash = await computePhash(tmpPath);
+
+//       let exifData = {};
+//       try {
+//         exifData = metadata.exif ? extract(metadata.exif) : {};
+//       } catch {}
+
+//       const forensicFeatures = {
+//         resolution: `${metadata.width}x${metadata.height}`,
+//         fileType: metadata.format,
+//         pHash,
+//         exifStripped: !metadata.exif,
+//         exifData
+//       };
+
+//       // 3️⃣ Run all AI layers (PARALLEL)
+//       const [bytez, yandexRes, llm, challengeEval] = await Promise.all([
+//         runBytezAiClassification(tmpPath).catch(() => ({ status: "ERROR", score: 0 })),
+//         yandexReverseSearch(tmpPath, pHash).catch(() => ({ yandexResults: [], status: "FAILED" })),
+//         analyzeImageWithGroq(tmpPath).catch(() => ({ verdict: "ERROR" })),
+//         analyzeSubmission(tmpPath, challenge_description).catch(() => ({ match: false }))
+//       ]);
+
+//       // 4️⃣ Final scoring
+//       const finalScore = calculateFinalScore(
+//         bytez,
+//         yandexRes.yandexResults,
+//         llm,
+//         challengeEval,
+//         forensicFeatures
+//       );
+
+//       // 5️⃣ Cleanup TEMP FILE
+//       fs.unlinkSync(tmpPath);
+
+//       // 6️⃣ RESPONSE (STATELESS)
+//       return res.json({
+//         user_id,
+//         challenge_id,
+//         final_score: finalScore.total,
+//         max_score: 500,
+//         verdict: finalScore.verdict,
+//         breakdown: finalScore.breakdown,
+//         rationale: finalScore.rationale,
+//         processing_time_ms: Date.now() - start
+//       });
+
+//     } catch (err) {
+//       if (tmpPath && fs.existsSync(tmpPath)) {
+//         fs.unlinkSync(tmpPath);
+//       }
+
+//       console.error("Evaluation failed:", err);
+//       return res.status(500).json({ error: "Evaluation failed" });
+//     }
+//   });
+// });
+
+// // --------------------------------
+// // SAFETY FALLBACK
+// // --------------------------------
+// app.use((req, res) => {
+//   res.status(404).json({
+//     status: "NOT_FOUND",
+//     message: "API route does not exist"
+//   });
+// });
+
+// // --------------------------------
+// app.listen(PORT, () => {
+//   console.log(`🚀 Stateless Evaluator running on port ${PORT}`);
+// });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // backend/server-evaluator.js
 // Stateless Image Evaluation API (Production Version)
-//docker build -t image-evaluator . && docker run -p 8100:8100 --env-file .env.docker image-evaluator 
-//docker run -d --name image-evaluator-api --env-file .env.docker -p 8100:8100 image-evaluator
-
 
 import express from "express";
 import cors from "cors";
@@ -16,53 +202,47 @@ import os from "os";
 import path from "path";
 const { extract } = exifpkg;
 
-// ---- Services (UNCHANGED) ----
+// ---- Services ----
 import { computePhash, yandexReverseSearch } from "./services/revesre_image_search.js";
 import { runBytezAiClassification } from "./services/bytez_ai_models1.js";
-import { analyzeImageWithGroq } from "./services/llm_analysis.js";
+import { analyzeImageWithGroq } from "./services/llm_quality_analysis.js";
 import analyzeSubmission from "./services/challenge_analysis.js";
 import { calculateFinalScore } from "./services/scoring.js";
-
-// --------------------------------
+// ------------------
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8100;
 const API_KEY = (process.env.API_KEY || "").trim();
-// --------------------------------
-// GLOBAL MIDDLEWARE (ORDER MATTERS)
-// --------------------------------
+
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
-// --------------------------------
-// AUTH MIDDLEWARE (FIXED)
-// --------------------------------
+// ----------------------------
+// AUTH MIDDLEWARE
+// ----------------------------
 app.use((req, res, next) => {
-  // ✅ Allow CORS preflight
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
+  if (req.method === "OPTIONS") return res.sendStatus(200);
 
   const authHeader = req.headers.authorization;
   if (!authHeader) {
-    return res.status(401).json({ error: "Unauthorized (missing header)" });
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-
   if (!API_KEY || token !== API_KEY) {
-    return res.status(401).json({ error: "Unauthorized (invalid token)" });
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
   next();
 });
 
-// --------------------------------
-// Concurrency guard (prevents overload)
-// --------------------------------
+// ----------------------------
+// Concurrency Guard
+// ----------------------------
 const limit = pLimit(1);
+const STRONG_MATCH_THRESHOLD = 50;
 
 // ===================================================
 // SINGLE STATELESS EVALUATION ENDPOINT
@@ -70,13 +250,7 @@ const limit = pLimit(1);
 app.post("/api/evaluate", async (req, res) => {
   const start = Date.now();
 
-  const {
-    user_id,
-    challenge_id,
-    challenge_description,
-    user_description,
-    image_url
-  } = req.body;
+  const { challenge_description, image_url } = req.body;
 
   if (!image_url || !challenge_description) {
     return res.status(400).json({ error: "Missing required fields" });
@@ -86,43 +260,78 @@ app.post("/api/evaluate", async (req, res) => {
     let tmpPath = null;
 
     try {
-      // 1️⃣ Download image (TEMP, cross-platform)
+      // 1️⃣ Download image to temp
       tmpPath = path.join(os.tmpdir(), `${Date.now()}.jpg`);
-
       const response = await axios.get(image_url, {
         responseType: "arraybuffer",
-        timeout: 15000
+        timeout: 15000,
       });
-
       fs.writeFileSync(tmpPath, response.data);
 
-      // 2️⃣ Metadata + pHash
+      // 2️⃣ Forensic preprocessing
       const imageBuffer = await sharp(tmpPath).toBuffer();
       const metadata = await sharp(imageBuffer).metadata();
       const pHash = await computePhash(tmpPath);
 
       let exifData = {};
+      let exifStripped = !metadata.exif;
       try {
-        exifData = metadata.exif ? extract(metadata.exif) : {};
-      } catch {}
+        if (metadata.exif) {
+          exifData = extract(metadata.exif);
+        }
+      } catch {
+        exifStripped = true;
+      }
 
       const forensicFeatures = {
         resolution: `${metadata.width}x${metadata.height}`,
         fileType: metadata.format,
         pHash,
-        exifStripped: !metadata.exif,
-        exifData
+        exifStripped,
+        exifData,
       };
 
-      // 3️⃣ Run all AI layers (PARALLEL)
-      const [bytez, yandexRes, llm, challengeEval] = await Promise.all([
-        runBytezAiClassification(tmpPath).catch(() => ({ status: "ERROR", score: 0 })),
-        yandexReverseSearch(tmpPath, pHash).catch(() => ({ yandexResults: [], status: "FAILED" })),
-        analyzeImageWithGroq(tmpPath).catch(() => ({ verdict: "ERROR" })),
-        analyzeSubmission(tmpPath, challenge_description).catch(() => ({ match: false }))
+      // 3️⃣ BYTEZ AI — HARD GATE
+      const bytez = await runBytezAiClassification(tmpPath);
+
+      if (
+        bytez?.status === "AI_DETECTED" ||
+        bytez?.status === "MANIPULATED" ||
+        bytez?.score > 0.8
+      ) {
+        fs.unlinkSync(tmpPath);
+        return res.json({
+          final_score: 0,
+          max_score: 500,
+          rationale: ["Image detected as AI-generated"],
+          processing_time_ms: Date.now() - start,
+        });
+      }
+
+      // 4️⃣ Reverse Image Search — HARD GATE
+      const yandexRes = await yandexReverseSearch(tmpPath, pHash);
+      const strongMatches =
+        yandexRes?.yandexResults?.filter(
+          (r) => r.similarity >= STRONG_MATCH_THRESHOLD
+        ) || [];
+
+      if (strongMatches.length > 0) {
+        fs.unlinkSync(tmpPath);
+        return res.json({
+          final_score: 0,
+          max_score: 500,
+          rationale: ["Image detected in reverse search (≥50% similarity)"],
+          processing_time_ms: Date.now() - start,
+        });
+      }
+
+      // 5️⃣ LLM + Challenge Evaluation (PARALLEL)
+      const [llm, challengeEval] = await Promise.all([
+        analyzeImageWithGroq(tmpPath),
+        analyzeSubmission(tmpPath, challenge_description),
       ]);
 
-      // 4️⃣ Final scoring
+      // 6️⃣ Final Scoring
       const finalScore = calculateFinalScore(
         bytez,
         yandexRes.yandexResults,
@@ -131,43 +340,35 @@ app.post("/api/evaluate", async (req, res) => {
         forensicFeatures
       );
 
-      // 5️⃣ Cleanup TEMP FILE
+      // 7️⃣ Cleanup
       fs.unlinkSync(tmpPath);
 
-      // 6️⃣ RESPONSE (STATELESS)
+      // 8️⃣ Final Response (NO VERDICT)
       return res.json({
-        user_id,
-        challenge_id,
         final_score: finalScore.total,
         max_score: 500,
-        verdict: finalScore.verdict,
-        breakdown: finalScore.breakdown,
         rationale: finalScore.rationale,
-        processing_time_ms: Date.now() - start
+        processing_time_ms: Date.now() - start,
       });
 
     } catch (err) {
       if (tmpPath && fs.existsSync(tmpPath)) {
         fs.unlinkSync(tmpPath);
       }
-
       console.error("Evaluation failed:", err);
       return res.status(500).json({ error: "Evaluation failed" });
     }
   });
 });
 
-// --------------------------------
+// ----------------------------
 // SAFETY FALLBACK
-// --------------------------------
+// ----------------------------
 app.use((req, res) => {
-  res.status(404).json({
-    status: "NOT_FOUND",
-    message: "API route does not exist"
-  });
+  res.status(404).json({ error: "API route does not exist" });
 });
 
-// --------------------------------
+// ----------------------------
 app.listen(PORT, () => {
   console.log(`🚀 Stateless Evaluator running on port ${PORT}`);
 });
